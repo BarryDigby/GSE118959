@@ -1,0 +1,163 @@
+---
+title: "Marvin_Lim_circRNA"
+author: "Barry"
+date: "17/04/2020"
+output: html_document
+---
+
+```{R}
+setwd("~/Desktop/GSE118959/data/GSE118959")
+
+mtx <- read.table("GSE118959_series_matrix.txt", sep="\t", header=T, row.names = "ID_REF")
+
+renamed <- c("LNCaP_Control_1", "LNCaP_Control_2", "LNCaP_Control_3",
+               "LNCaP_Clone1_1", "LNCaP_Clone1_2", "LNCaP_Clone1_3",
+               "LNCaP_Clone9_1", "LNCaP_Clone9_2", "LNCaP_Clone9_3")
+
+colnames(mtx) <- renamed
+
+head(mtx)
+```
+
+```{R}
+# expression values are in log2 scale, convert to linear scale and then calculate 'Ratio'
+# then use if..else to calculate inverse transform if needed 
+# use t.test( paired = T) on the 3 expr values
+# use p.adjust on column of pvalues. 
+
+# fold change function
+Fold_Change <- function(ratio){
+  if(ratio < 1){
+    FC <- -1/ratio
+  } else{
+    FC <- ratio
+  }
+  return(FC)
+}
+
+
+for(i in 1:nrow(mtx)){
+  
+  row <- mtx[i,]
+  
+  control <- as.numeric(row[,1:3])
+  clone1 <- as.numeric(row[,4:6])
+  clone9 <- as.numeric(row[,7:9])
+  
+  t.test_clone1 <- t.test(clone1, control, paired=T)
+  t.test_clone9 <- t.test(clone9, control, paired=T)
+  
+  clone1_p.val <- t.test_clone1$p.value
+  clone9_p.val <- t.test_clone9$p.value
+  
+  clone1_ratio <- 2^((mean(clone1))-(mean(control)))
+  clone9_ratio <- 2^((mean(clone9))-(mean(control)))  
+  
+  mtx$Clone1_FC[i] <- Fold_Change(clone1_ratio)
+  mtx$Clone1_pvalue[i] <- clone1_p.val 
+  
+  mtx$Clone9_FC[i] <- Fold_Change(clone9_ratio)
+  mtx$Clone9_pvalue[i] <- clone9_p.val
+}
+
+# Calculate FDR
+mtx$Clone1_FDR <- p.adjust(mtx$Clone1_pvalue, method = "fdr")
+mtx$Clone9_FDR <- p.adjust(mtx$Clone9_pvalue, method = "fdr")
+
+```
+
+# subset results to keep tidy
+```{R}
+# rownames are preserved.. 
+clone1_res <- mtx[,c("Clone1_FC", "Clone1_pvalue", "Clone1_FDR")]
+clone9_res <- mtx[,c("Clone9_FC", "Clone9_pvalue", "Clone9_FDR")]
+```
+
+# subset again
+```{R}
+up_key <-  intersect(rownames(clone9_res)[which(clone9_res$Clone9_FC>=2)],
+                     rownames(clone9_res)[which(clone9_res$Clone9_pvalue<=0.05)])
+
+down_key <- intersect(rownames(clone9_res)[which(clone9_res$Clone9_FC<=-2)],
+                      rownames(clone9_res)[which(clone9_res$Clone9_pvalue<=0.05)])
+
+up_key1 <-  intersect(rownames(clone1_res)[which(clone1_res$Clone1_FC>=2)],
+                     rownames(clone1_res)[which(clone1_res$Clone1_pvalue<=0.05)])
+
+down_key1 <- intersect(rownames(clone1_res)[which(clone1_res$Clone1_FC<=-2)],
+                      rownames(clone1_res)[which(clone1_res$Clone1_pvalue<=0.05)])
+
+clone1_upreg <- as.data.frame((clone1_res)[which(rownames(clone1_res) %in% up_key1),],)
+
+clone1_downreg <- as.data.frame((clone1_res)[which(rownames(clone1_res) %in% down_key1),])
+
+clone9_upreg <- as.data.frame((clone9_res)[which(rownames(clone9_res) %in% up_key),])
+
+clone9_downreg <- as.data.frame((clone9_res)[which(rownames(clone9_res) %in% down_key),])
+
+```
+
+# ad on the alias names (matches CSCD i think, just grep the dir to check ..)
+
+```{R}
+setwd("~/Desktop/GSE118959/data/GSE118959/")
+alias <- read.csv("master_probe.csv", header=T, sep="\t")
+
+clone1_upreg$probeID <- rownames(clone1_upreg)
+clone1_upreg <- merge(clone1_upreg, alias, by="probeID")
+rownames(clone1_upreg) <- clone1_upreg$probeID
+clone1_upreg <- clone1_upreg[, c(5, 6, 8, 9, 10, 11, 2, 3, 4)]
+clone1_upreg$strand <- "-"
+
+## i used "-" for strand orientation in manually created bed file, must match here.
+
+clone1_downreg$probeID <- rownames(clone1_downreg)
+clone1_downreg <- merge(clone1_downreg, alias, by="probeID")
+rownames(clone1_downreg) <- clone1_downreg$probeID
+clone1_downreg <- clone1_downreg[, c(5, 6, 8, 9, 10, 11, 2, 3, 4)]
+clone1_downreg$strand <- "-"
+
+clone9_upreg$probeID <- rownames(clone9_upreg)
+clone9_upreg <- merge(clone9_upreg, alias, by="probeID")
+rownames(clone9_upreg) <- clone9_upreg$probeID
+clone9_upreg <- clone9_upreg[, c(5, 6, 8, 9, 10, 11, 2, 3, 4)]
+clone9_upreg$strand <- "-"
+
+clone9_downreg$probeID <- rownames(clone9_downreg)
+clone9_downreg <- merge(clone9_downreg, alias, by="probeID")
+rownames(clone9_downreg) <- clone9_downreg$probeID
+clone9_downreg <- clone9_downreg[, c(5, 6, 8, 9, 10, 11, 2, 3, 4)]
+clone9_downreg$strand <- "-"
+
+# add NA to empty cells
+# convert to characters
+# replace NA with adjacent circRNA ID 
+# last answer no votes??? https://stackoverflow.com/questions/15629885/replace-na-in-column-with-value-in-adjacent-column
+
+clone1_upreg[clone1_upreg==""] <- NA
+clone1_upreg$circRNA <- as.character(clone1_upreg$circRNA)
+clone1_upreg$Alias <- as.character(clone1_upreg$Alias)
+clone1_upreg$Alias <- ifelse(is.na(clone1_upreg$Alias), paste(clone1_upreg$circRNA), paste(clone1_upreg$Alias)); clone1_upreg
+write.table(clone1_upreg, file="results/DE_circRNA/clone1_upreg.txt", sep="\t", row.names = F, quote = F)
+
+clone1_downreg[clone1_downreg==""] <- NA
+clone1_downreg$circRNA <- as.character(clone1_downreg$circRNA)
+clone1_downreg$Alias <- as.character(clone1_downreg$Alias)
+clone1_downreg$Alias <- ifelse(is.na(clone1_downreg$Alias), paste(clone1_downreg$circRNA), paste(clone1_downreg$Alias)); clone1_downreg
+write.table(clone1_downreg, file="results/DE_circRNA/clone1_downreg.txt", sep="\t", row.names = F, quote = F)
+
+clone9_upreg[clone9_upreg==""] <- NA
+clone9_upreg$circRNA <- as.character(clone9_upreg$circRNA)
+clone9_upreg$Alias <- as.character(clone9_upreg$Alias)
+clone9_upreg$Alias <- ifelse(is.na(clone9_upreg$Alias), paste(clone9_upreg$circRNA), paste(clone9_upreg$Alias)); clone9_upreg
+write.table(clone9_upreg, file="results/DE_circRNA/clone9_upreg.txt", sep="\t", row.names = F, quote = F)
+
+clone9_downreg[clone9_downreg==""] <- NA
+clone9_downreg$circRNA <- as.character(clone9_downreg$circRNA)
+clone9_downreg$Alias <- as.character(clone9_downreg$Alias)
+clone9_downreg$Alias <- ifelse(is.na(clone9_downreg$Alias), paste(clone9_downreg$circRNA), paste(clone9_downreg$Alias)); clone9_downreg
+write.table(clone9_downreg, file="results/DE_circRNA/clone9_downreg.txt", sep="\t", row.names = F, quote = F)
+```
+
+
+

@@ -22,8 +22,8 @@ Firstly, I will use targetscan (7.0) to perform this analysis on a test "UTR" fi
 
 ```bash
 curl -L https://cpanmin.us | perl - --sudo App::cpanminus
-sudo cpanm Bio::TreeIO --force
-sudo cpanm Statistics::Lite
+sudo cpanm Bio::TreeIO -f -n 
+sudo cpanm Statistics::Lite -f -n ##-n no test 
 ```
 
 

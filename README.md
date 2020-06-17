@@ -26,6 +26,15 @@ sudo cpanm Bio::TreeIO -f -n
 sudo cpanm Statistics::Lite -f -n ##-n no test 
 ```
 
+```
+For fresh install of perl (useful for lugh)  
+delete /home/perl5 dir
+follow instructions here: https://gist.github.com/ckandoth/1f01d8f3692bb8de7f2929f259a4035f
+after install, run curl -L https://cpanmin.us | perl - App::cpanminus
+installs automatically to /home/perl5
+then install final 2 libraries via cpanm. 
+have not tested install without cpanm part. 
+```
 
 I am still testing the software. Once it is running, I will have to develop a pipeline to extract DNA sequences, convert to RNA and then format them for targetscan input. (use samtools faidx here, also `sed 's/T/U/g'` for DNA to RNA conversion). 
 
